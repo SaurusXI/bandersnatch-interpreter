@@ -1,67 +1,111 @@
-import nltk
-from nltk.tokenize import word_tokenize
+import spacy
 import string
 import random
 
 class Replier:
-    def __init__(self):
-        self.similar_templates = []
-        self.similar_templates.append(string.Template('You try to ${VERB} ${ADP} the ${NOUN}, but nothing happens.'))
-        self.similar_templates.append(string.Template('You try to ${VERB} ${ADP} the ${NOUN}, but that doesn\'t do anything.'))
-        self.similar_templates.append(string.Template(''))
+    def __init__(self, nlp_model):
+        self.nlp = nlp_model
+        self.nlp_small = spacy.load("en_core_web_small")
+        self.prefixes = ["Nothing happens.", "That doesn't do anything.", "You try to ${VERB} the ${NOUN}, but that doesn\'t do anything.", "${VERB}ing the ${NOUN} doesn't do anything.", "That doesn't seem to do anything.", "${VERB}ing the ${NOUN} doesn't help.", "Nothing happens when you ${VERB} the ${NOUN}."]
+        self.default = "That doesn't make sense to me. Try typing 'help' for examples on how to interact with the environment"
 
-        self.dissimilar_templates = []
-        self.dissimilar_templates.append(string.Template('You ${VERB} ${ADP} the ${NOUN}. Now back to the task at hand.'))
-        self.dissimilar_templates.append(string.Template('Is that really going to help right now?'))
-        self.dissimilar_templates.append(string.Template('You shouldn\'t be wasting time!'))
-        self.dissimilar_templates.append(string.Template('Why would you want to do that right now?'))
+    def reply(self, user_input, l_score = 0, r_score = 0, left_option = None, right_option = None):
+            
+        tokens = self.nlp(user_input)
 
-        self.default_template = 'That doesn\'t make sense to me'
+        root_verb = None
+        noun_ = None
+        nonsense = False
 
+        for token in tokens:
+            if token.pos_ == 'VERB' and token.dep_ == 'ROOT':
+                root_verb = token
+                for child in root_verb.children:
+                    if child.pos_ == 'NOUN':
+                        noun_ = child
+                        break
+                break
+            # print(token.text, token.pos_, token.dep_)
 
-    def reply(self, user_input, best_score):
-        tokens = word_tokenize(user_input)
-        lexemes = nltk.pos_tag(tokens, tagset = 'universal')
+        if root_verb is None or noun_ is None:
+            nonsense = True
 
-        nouns = []
-        verbs = []
-        adpositions = []
+        if not nonsense:
+            l_verb = None
+            l_noun_ = None
 
-        for lexeme in lexemes:
-            tag = lexeme[1]
-            if tag == 'NOUN':
-                nouns.append(lexeme[0])
-            elif tag == 'VERB':
-                verbs.append(lexeme[0])
-            elif tag == 'ADP':
-                adpositions.append(lexeme[0])
+            r_verb = None
+            r_noun_ = None
 
-        if best_score > 0.7:
-            similar = True
-        else:
-            similar = False
-        print(lexemes)
-        return self.generate_reply(nouns, verbs, adpositions, similar)
+            similarity = {"verb": 0, "noun": 0}
 
-    def generate_reply(self, nouns, verbs, adps, similar = False):
-        if not nouns or not verbs:
-            return self.default_template
+            if left_option is not None:
+                if l_score >= r_score:
 
-        noun = nouns[0].lower()
+                    l_tokens = self.nlp_small(left_option)
 
-        verb = verbs[0].lower()
+                    for token in l_tokens:
+                        if token.pos_ == 'VERB':
+                            l_verb = token
+                        elif token.pos_ == 'NOUN':
+                            l_noun_ = child
+                                    
+                        print(token.text, token.pos_, token.dep_)
+
+                    if l_verb is not None:
+                        similarity['verb'] = noun_.similarity(l_verb)
+                    if l_noun_ is not None:
+                        similarity['noun'] = root_verb.similarity(l_noun_)
+                
+                
+            if right_option is not None:
+                if r_score > l_score:
+                    r_tokens = self.nlp_small(right_option)
+
+                    for token in r_tokens:
+                        if token.pos_ == 'VERB':
+                            r_verb = token
+                        elif token.pos_ == 'NOUN':
+                            r_noun_ = child
+
+                    if r_verb is not None:
+                        similarity['verb'] = noun_.similarity(r_verb)
+                    if r_noun_ is not None:
+                        similarity['noun'] = root_verb.similarity(r_noun_)
+
+            pos_max = max(similarity, key = similarity.get)
+
+            if similarity[pos_max] > 0.79:
+                pos_key = pos_max
+
+            else:
+                pos_key = 'dissimilar'
+
+        return self.generate_reply(pos_key, nonsense, root_verb, noun_)        
+
+    def generate_reply(self, most_similar_pos, nonsense, verb, noun):
+        if nonsense:
+            return self.default
+
+        if most_similar_pos == 'noun':
+            templates = [ 'Maybe you can do something else with the ${NOUN}?',
+                                'Try interacting with the ${NOUN} in a different way.',
+                                'You should try interacting with the ${NOUN} in a different way.',
+                                'Try doing something else with the ${NOUN}.']
+            index = random.randint(0, len(templates) - 1)
+            template = templates[index]
+
+        elif most_similar_pos == 'verb':
+            templates = ['You should try to ${VERB} something else.', 'Try ${VERB}ing something else.', 'Perhaps you can ${VERB} something else in your environment.']
+            index = random.randint(0, len(templates) - 1)
+            template = templates[index]
+
+        elif most_similar_pos == 'dissimilar':
+            template = ''
+
+        p_idx = random.randint(0, len(self.prefixes) - 1)
+        template = string.Template(self.prefixes[p_idx] + ' ' + template)
+        reply = template.safe_substitute(NOUN = noun.text.lower(), VERB = verb.text.lower())
+
+        return reply
         
-        if adps:
-            adp = adps[0].lower()
-        else:
-            adp = ''
-
-        if similar:
-            index = random.randint(0, len(self.similar_templates) - 1)
-            reply = self.similar_templates[index].safe_substitute(NOUN = noun, VERB = verb, ADP = adp)
-            return reply
-
-        else:
-            index = random.randint(0, len(self.dissimilar_templates) - 1)
-            reply = self.dissimilar_templates[index].safe_substitute(NOUN = noun, VERB = verb, ADP = adp)
-            return reply
