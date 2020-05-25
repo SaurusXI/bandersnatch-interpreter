@@ -1,4 +1,4 @@
 env
 .vscode
-main.py
-model
+model*
+pyserver/__pycache__
