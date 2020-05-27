@@ -1,0 +1,5 @@
+env
+.vscode
+model*
+pyserver/__pycache__
+pyserver/bandersnatch_nlu
