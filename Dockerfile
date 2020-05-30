@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 80
 EXPOSE 443
 
-CMD ["gunicorn", "--chdir", "/usr/src/app", "main:app", "-b", "0.0.0.0:80"]
+CMD ["gunicorn", "--chdir", "/usr/src/app", "main:app", "-b", "0.0.0.0:443", "--threads", "4"]

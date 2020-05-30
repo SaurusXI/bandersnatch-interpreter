@@ -15,6 +15,7 @@ class Replier:
         nonsense = False
 
         root_verb = self.nlp('')
+        pos_key = 'dissimilar'
         noun_ = tokens.ents[0] if len(tokens.ents) > 0 else self.nlp('')
 
         for token in tokens:
